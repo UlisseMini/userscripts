@@ -24,7 +24,7 @@
 
     // Get clipboard text and paste with commas
     const clipText = e.clipboardData.getData("text");
-    const text = clipText.replace(/\n+/g, ", ");
+    const text = clipText.replace(/[\n\r]+/g, ", ");
 
     // Replace the text in the input element
     e.target.focus(); // probably focused, but do this to be sure
