@@ -4,7 +4,7 @@
 // @version      0.1
 // @description  Replace newlines with commas when pasting into input tags
 // @author       Ulisse Mini
-// @match        *://*/
+// @match        *://*/*
 // @icon         https://uli.rocks/profile.png
 // @grant        none
 // ==/UserScript==
