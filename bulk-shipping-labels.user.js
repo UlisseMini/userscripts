@@ -15,7 +15,7 @@
   function hookAll() {
     // NOTE: These are display block anchor tags, so I call them buttons
     const printButtons = document.querySelectorAll(
-      `[title]="Print shipping label"`
+      `[title="Print shipping label"]`
     );
     printButtons.forEach((btn) => {
       btn.style.border = "2px solid red";
