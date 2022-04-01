@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bulk print packing slips
 // @namespace    https://uli.rocks
-// @version      0.2
+// @version      0.3
 // @description  Bulk print packing slips on paypal
 // @author       Ulisse Mini
 // @match        https://www.paypal.com/*
@@ -17,6 +17,8 @@
   // Print packing slip
   // Click Print and print on printer (or save pdf and bulk print later)
   // Back 3 times
+
+  // TODO: Debugging overwrite HTMLElement.click with border and delay
 
   function $$(x) {
     return Array.from(document.querySelectorAll(x));
@@ -34,17 +36,20 @@
     });
   }
 
-  const url = document.location.href;
-  if (url.match(/.*\/activities\/.*/)) {
-    // Hook all the names
-    setInterval(hookAll, 1000);
-  } else if (url.match(/.*\/activity\/payment\/.*/)) {
-    // Now we're on /activity/payment/<id>, click "Print packing slip"
-    $(`a[href^="/shiplabel/packingslip/"]`).click();
-  } else if (url.match(/.*\/shiplabel\/packingslip\/.*/)) {
-    // Now we're on /shiplabel/packingslip/<id>, click print
-    $$("span")
-      .find((s) => s.textContent === "Print")
-      .click();
-  }
+  // TODO: More robust then DOMContentLoaded
+  document.addEventListener("DOMContentLoaded", () => {
+    const url = document.location.href;
+    if (url.match(/.*\/activities\/.*/)) {
+      // Hook all the names
+      setInterval(hookAll, 1000);
+    } else if (url.match(/.*\/activity\/payment\/.*/)) {
+      // Now we're on /activity/payment/<id>, click "Print packing slip"
+      $(`a[href^="/shiplabel/packingslip/"]`).click();
+    } else if (url.match(/.*\/shiplabel\/packingslip\/.*/)) {
+      // Now we're on /shiplabel/packingslip/<id>, click print
+      $$("span")
+        .find((s) => s.textContent === "Print")
+        .click();
+    }
+  });
 })();
