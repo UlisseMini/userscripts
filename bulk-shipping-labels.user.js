@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bulk print shipping labels paypal
 // @namespace    https://uli.rocks
-// @version      0.1
+// @version      0.2
 // @description  Bulk print shipping labels on paypal
 // @author       Ulisse Mini
 // @match        https://www.paypal.com/activities/*
