@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bulk print packing slips
 // @namespace    https://uli.rocks
-// @version      0.3
+// @version      0.4
 // @description  Bulk print packing slips on paypal
 // @author       Ulisse Mini
 // @match        https://www.paypal.com/*
@@ -36,20 +36,32 @@
     });
   }
 
-  // TODO: More robust then DOMContentLoaded
-  document.addEventListener("DOMContentLoaded", () => {
-    const url = document.location.href;
-    if (url.match(/.*\/activities\/.*/)) {
-      // Hook all the names
-      setInterval(hookAll, 1000);
-    } else if (url.match(/.*\/activity\/payment\/.*/)) {
-      // Now we're on /activity/payment/<id>, click "Print packing slip"
+  function untilSuccess(fn) {
+    const id = setInterval(() => {
+      try {
+        fn();
+        clearInterval(id);
+      } catch (e) {
+        console.error(e);
+      }
+    }, 1000);
+  }
+
+  const url = document.location.href;
+  if (url.match(/.*\/activities\/.*/)) {
+    // Hook all the names
+    setInterval(hookAll, 1000);
+  } else if (url.match(/.*\/activity\/payment\/.*/)) {
+    // Now we're on /activity/payment/<id>, click "Print packing slip"
+    untilSuccess(() => {
       $(`a[href^="/shiplabel/packingslip/"]`).click();
-    } else if (url.match(/.*\/shiplabel\/packingslip\/.*/)) {
-      // Now we're on /shiplabel/packingslip/<id>, click print
+    });
+  } else if (url.match(/.*\/shiplabel\/packingslip\/.*/)) {
+    // Now we're on /shiplabel/packingslip/<id>, click print
+    untilSuccess(() => {
       $$("span")
         .find((s) => s.textContent === "Print")
         .click();
-    }
-  });
+    });
+  }
 })();
