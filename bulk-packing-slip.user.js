@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bulk print packing slips
 // @namespace    https://uli.rocks
-// @version      0.7
+// @version      0.8
 // @description  Bulk print packing slips on paypal
 // @author       Ulisse Mini
 // @match        https://www.paypal.com/*
@@ -39,6 +39,7 @@
     const clicked = get("clicked") || [];
     !clicked.includes(id) && clicked.push(id);
     set("clicked", clicked);
+    hookAll(); // update colors
   };
 
   const hasBeenClicked = (id) => (get("clicked") || []).includes(id);
@@ -66,7 +67,7 @@
       if (hooked[name.href]) return;
       hooked[name.href] = true;
 
-      name.addEventListener("click", () => setClicked(getId(id)));
+      name.addEventListener("click", () => setClicked(id));
     });
   }
 
