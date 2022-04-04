@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bulk print packing slips
 // @namespace    https://uli.rocks
-// @version      0.5
+// @version      0.6
 // @description  Bulk print packing slips on paypal
 // @author       Ulisse Mini
 // @match        https://www.paypal.com/*
@@ -45,7 +45,7 @@
     (get("clicked") || []).includes(id);
   };
 
-  const getId = (a) => a.href.match(/\/(w+)$/)[1];
+  const getId = (a) => a.href.match(/\/(\w+)$/)[1];
 
   const addButton = (text, onclick) => {
     const button = document.createElement("button");
@@ -62,20 +62,19 @@
       if (hooked[name.href]) return;
       hooked[name.href] = true;
 
-      name.style.borderBottom = "2px solid red";
       name.addEventListener("click", (e) => setClicked(getId(e.target)));
     });
   }
 
+  let loop;
   function printAll() {
     const urlPrefix = "https://www.paypal.com/shiplabel/packingslip/";
-    const ids = $$('td a[href^="/activity/payment/"]')
-      .map(getId)
-      .filter((id) => !hasBeenClicked(id));
+    const linkTags = $$('td a[href^="/activity/payment/"]');
+    const ids = linkTags.map(getId).filter((id) => !hasBeenClicked(id));
 
     let i = 0;
     let win = null;
-    const loop = setInterval(() => {
+    loop = setInterval(() => {
       if (!win) {
         win = window.open(urlPrefix + ids[i]);
         setClicked(ids[i]);
@@ -90,19 +89,22 @@
       }
     }, 200);
   }
+  function cancelPrint() {
+    clearInterval(loop);
+  }
 
   const url = document.location.href;
   if (url.match(/.*\/activities\/.*/)) {
     setInterval(hookAll, 1000);
     untilSuccess(() => addButton("Print all slips", printAll));
+    untilSuccess(() => addButton("Cancel print all", cancelPrint));
   } else if (url.match(/.*\/shiplabel\/packingslip\/.*/)) {
     // Now we're on /shiplabel/packingslip/<id>, so print
     untilSuccess(() => {
-      if ($$("span").find((s) => s.textContent === "Print")) {
-        // dom has loaded, print then close the window
-        window.print();
-        window.close();
-      }
+      $$("span")
+        .find((s) => s.textContent === "Print")
+        .click();
+      window.addEventListener("afterprint", () => window.close());
     });
   }
 })();
