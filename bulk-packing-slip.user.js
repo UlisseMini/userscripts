@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bulk print packing slips
 // @namespace    https://uli.rocks
-// @version      0.4
+// @version      0.5
 // @description  Bulk print packing slips on paypal
 // @author       Ulisse Mini
 // @match        https://www.paypal.com/*
@@ -10,31 +10,19 @@
 // @grant        GM_getTab
 // ==/UserScript==
 
+// Print to files at once, once in files normal file management can be used
+// to deal with duplicates
+//
+// Show which packing slips have been printed in ui
+
 (function () {
   "use strict";
 
-  // Click person
-  // Print packing slip
-  // Click Print and print on printer (or save pdf and bulk print later)
-  // Back 3 times
-
-  // TODO: Debugging overwrite HTMLElement.click with border and delay
-
-  function $$(x) {
-    return Array.from(document.querySelectorAll(x));
-  }
-  function $(x) {
-    return document.querySelector(x);
-  }
-
-  function hookAll() {
-    // Select names
-    const names = $$(`td a[href^="/activity/payment/"]`);
-    names.forEach((name) => {
-      name.style.border = "2px solid red";
-      // TODO: Add button to print packing slip
-    });
-  }
+  // Helpers
+  const $$ = (x) => Array.from(document.querySelectorAll(x));
+  const $ = (x) => document.querySelector(x);
+  const set = (k, v) => localStorage.setItem("uli-" + k, JSON.stringify(v));
+  const get = (k) => JSON.stringify(localStorage.getItem("uli-" + k));
 
   function untilSuccess(fn) {
     const id = setInterval(() => {
@@ -44,24 +32,77 @@
       } catch (e) {
         console.error(e);
       }
-    }, 1000);
+    }, 200);
+  }
+
+  const setClicked = (id) => {
+    const clicked = get("clicked") || [];
+    !clicked.includes(id) && clicked.push(id);
+    set("clicked", clicked);
+  };
+
+  const hasBeenClicked = (id) => {
+    (get("clicked") || []).includes(id);
+  };
+
+  const getId = (a) => a.href.match(/\/(w+)$/)[1];
+
+  const addButton = (text, onclick) => {
+    const button = document.createElement("button");
+    button.textContent = text;
+    button.onclick = onclick;
+    $(".SearchFilterContainer").firstChild.children[1].appendChild(button);
+  };
+
+  let hooked = {};
+  function hookAll() {
+    // Select names
+    const names = $$(`td a[href^="/activity/payment/"]`);
+    names.forEach((name) => {
+      if (hooked[name.href]) return;
+      hooked[name.href] = true;
+
+      name.style.borderBottom = "2px solid red";
+      name.addEventListener("click", (e) => setClicked(getId(e.target)));
+    });
+  }
+
+  function printAll() {
+    const urlPrefix = "https://www.paypal.com/shiplabel/packingslip/";
+    const ids = $$('td a[href^="/activity/payment/"]')
+      .map(getId)
+      .filter((id) => !hasBeenClicked(id));
+
+    let i = 0;
+    let win = null;
+    const loop = setInterval(() => {
+      if (!win) {
+        win = window.open(urlPrefix + ids[i]);
+        setClicked(ids[i]);
+      }
+
+      if (win.closed) {
+        win = null;
+        i++;
+        if (i >= ids.length) {
+          clearInterval(loop);
+        }
+      }
+    }, 200);
   }
 
   const url = document.location.href;
   if (url.match(/.*\/activities\/.*/)) {
-    // Hook all the names
     setInterval(hookAll, 1000);
-  } else if (url.match(/.*\/activity\/payment\/.*/)) {
-    // Now we're on /activity/payment/<id>, click "Print packing slip"
-    untilSuccess(() => {
-      $(`a[href^="/shiplabel/packingslip/"]`).click();
-    });
+    untilSuccess(() => addButton("Print all slips", printAll));
   } else if (url.match(/.*\/shiplabel\/packingslip\/.*/)) {
-    // Now we're on /shiplabel/packingslip/<id>, click print
+    // Now we're on /shiplabel/packingslip/<id>, so print
     untilSuccess(() => {
-      $$("span")
-        .find((s) => s.textContent === "Print")
-        .click();
+      if ($$("span").find((s) => s.textContent === "Print")) {
+        // dom has loaded, print then close the window
+        window.print();
+        window.close();
+      }
     });
   }
 })();
