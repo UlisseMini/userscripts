@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bulk print packing slips
 // @namespace    https://uli.rocks
-// @version      0.6
+// @version      0.7
 // @description  Bulk print packing slips on paypal
 // @author       Ulisse Mini
 // @match        https://www.paypal.com/*
@@ -22,7 +22,7 @@
   const $$ = (x) => Array.from(document.querySelectorAll(x));
   const $ = (x) => document.querySelector(x);
   const set = (k, v) => localStorage.setItem("uli-" + k, JSON.stringify(v));
-  const get = (k) => JSON.stringify(localStorage.getItem("uli-" + k));
+  const get = (k) => JSON.parse(localStorage.getItem("uli-" + k));
 
   function untilSuccess(fn) {
     const id = setInterval(() => {
@@ -41,9 +41,7 @@
     set("clicked", clicked);
   };
 
-  const hasBeenClicked = (id) => {
-    (get("clicked") || []).includes(id);
-  };
+  const hasBeenClicked = (id) => (get("clicked") || []).includes(id);
 
   const getId = (a) => a.href.match(/\/(\w+)$/)[1];
 
@@ -59,10 +57,16 @@
     // Select names
     const names = $$(`td a[href^="/activity/payment/"]`);
     names.forEach((name) => {
+      // Color based on hasBeenClicked
+      const id = getId(name);
+      const color = hasBeenClicked(id) ? "red" : "green";
+      name.style.border = "1px solid " + color;
+
+      // Only hook listener once
       if (hooked[name.href]) return;
       hooked[name.href] = true;
 
-      name.addEventListener("click", (e) => setClicked(getId(e.target)));
+      name.addEventListener("click", () => setClicked(getId(id)));
     });
   }
 
