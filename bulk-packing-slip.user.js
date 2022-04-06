@@ -12,24 +12,32 @@
 // ==/UserScript==
 (function () {
     "use strict";
-    // Helpers
+    // Selection helpers
     const $$ = (x) => Array.from(document.querySelectorAll(x));
     const $ = (x) => document.querySelector(x);
-    const set = (k, v) => localStorage.setItem("uli-" + k, JSON.stringify(v));
-    const get = (k) => JSON.parse(localStorage.getItem("uli-" + k) || "null");
+    const select = {
+        paymentNames: () => $$(`td a[href^="/activity/payment/"]`),
+    };
+    // Get payment id from payment name element
+    const paymentId = (a) => a.href.match(/\w+$/)[0];
+    // Run function until success, more reliable then DOMContentLoaded.
     function untilSuccess(fn) {
         const id = setInterval(() => {
             if (fn())
                 clearInterval(id);
         }, 200);
     }
+    // Storage
+    const set = (k, v) => localStorage.setItem("uli-" + k, JSON.stringify(v));
+    const get = (k) => JSON.parse(localStorage.getItem("uli-" + k) || "null");
+    // Have we clicked a payment? (TODO: Replace with havePrinted; make editable)
     const setClicked = (id) => {
         const clicked = get("clicked") || [];
         !clicked.includes(id) && clicked.push(id);
         set("clicked", clicked);
     };
     const hasBeenClicked = (id) => (get("clicked") || []).includes(id);
-    const getId = (a) => a.href.match(/\w+$/)[0];
+    // UI for controlling the running script
     const createButton = (text, onclick) => {
         const button = document.createElement("button");
         button.textContent = text;
@@ -40,17 +48,13 @@
         const button = createButton(text, onclick);
         return Boolean($(".SearchFilterContainer")?.firstChild?.childNodes[1].appendChild(button));
     };
-    const select = {
-        paymentNames: () => $$(`td a[href^="/activity/payment/"]`),
-    };
+    // Called repeatadly. we need hooked so we don't addEventListener twice.
     let hooked = {};
-    function hookAll() {
-        // Select names
-        // TODO: Add class, use :not instead of hooked dict (or use onclick)
+    function hookPaymentNames() {
         const names = select.paymentNames();
         names.forEach((name) => {
             // Color based on hasBeenClicked
-            const id = getId(name);
+            const id = paymentId(name);
             const color = hasBeenClicked(id) ? "red" : "green";
             name.style.border = "1px solid " + color;
             // Only hook listener once
@@ -65,10 +69,10 @@
         if (loop)
             clearInterval(loop);
     }
-    function printAll() {
+    function startPrintAll() {
         const urlPrefix = "https://www.paypal.com/shiplabel/packingslip/";
         const linkTags = select.paymentNames();
-        const ids = linkTags.map(getId).filter((id) => !hasBeenClicked(id));
+        const ids = linkTags.map(paymentId).filter((id) => !hasBeenClicked(id));
         let i = 0;
         let win;
         loop = setInterval(() => {
@@ -87,12 +91,12 @@
     }
     const url = document.location.href;
     if (url.match(/.*\/activities\/.*/)) {
-        setInterval(hookAll, 1000);
-        untilSuccess(() => addButton("Print all slips", printAll));
+        setInterval(hookPaymentNames, 1000);
+        untilSuccess(() => addButton("Print all slips", startPrintAll));
         untilSuccess(() => addButton("Cancel print all", cancelPrint));
     }
     else if (url.match(/.*\/shiplabel\/packingslip\/.*/)) {
-        // Now we're on /shiplabel/packingslip/<id>, so print
+        // Now we're on /shiplabel/packingslip/<id>. Click print then close the window
         untilSuccess(() => {
             const el = $$("span").find((s) => s.textContent === "Print");
             if (el) {
