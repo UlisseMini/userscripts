@@ -1,7 +1,8 @@
+"use strict";
 // ==UserScript==
 // @name         Bulk print packing slips
 // @namespace    https://uli.rocks
-// @version      0.8
+// @version      0.9
 // @description  Bulk print packing slips on paypal
 // @author       Ulisse Mini
 // @match        https://www.paypal.com/*
@@ -9,107 +10,97 @@
 // @grant        GM_saveTab
 // @grant        GM_getTab
 // ==/UserScript==
-
-// Print to files at once, once in files normal file management can be used
-// to deal with duplicates
-//
-// Show which packing slips have been printed in ui
-
 (function () {
-  "use strict";
-
-  // Helpers
-  const $$ = (x) => Array.from(document.querySelectorAll(x));
-  const $ = (x) => document.querySelector(x);
-  const set = (k, v) => localStorage.setItem("uli-" + k, JSON.stringify(v));
-  const get = (k) => JSON.parse(localStorage.getItem("uli-" + k));
-
-  function untilSuccess(fn) {
-    const id = setInterval(() => {
-      try {
-        fn();
-        clearInterval(id);
-      } catch (e) {
-        console.error(e);
-      }
-    }, 200);
-  }
-
-  const setClicked = (id) => {
-    const clicked = get("clicked") || [];
-    !clicked.includes(id) && clicked.push(id);
-    set("clicked", clicked);
-    hookAll(); // update colors
-  };
-
-  const hasBeenClicked = (id) => (get("clicked") || []).includes(id);
-
-  const getId = (a) => a.href.match(/\/(\w+)$/)[1];
-
-  const addButton = (text, onclick) => {
-    const button = document.createElement("button");
-    button.textContent = text;
-    button.onclick = onclick;
-    $(".SearchFilterContainer").firstChild.children[1].appendChild(button);
-  };
-
-  let hooked = {};
-  function hookAll() {
-    // Select names
-    const names = $$(`td a[href^="/activity/payment/"]`);
-    names.forEach((name) => {
-      // Color based on hasBeenClicked
-      const id = getId(name);
-      const color = hasBeenClicked(id) ? "red" : "green";
-      name.style.border = "1px solid " + color;
-
-      // Only hook listener once
-      if (hooked[name.href]) return;
-      hooked[name.href] = true;
-
-      name.addEventListener("click", () => setClicked(id));
-    });
-  }
-
-  let loop;
-  function printAll() {
-    const urlPrefix = "https://www.paypal.com/shiplabel/packingslip/";
-    const linkTags = $$('td a[href^="/activity/payment/"]');
-    const ids = linkTags.map(getId).filter((id) => !hasBeenClicked(id));
-
-    let i = 0;
-    let win = null;
-    loop = setInterval(() => {
-      if (!win) {
-        win = window.open(urlPrefix + ids[i]);
-        setClicked(ids[i]);
-      }
-
-      if (win.closed) {
-        win = null;
-        i++;
-        if (i >= ids.length) {
-          clearInterval(loop);
-        }
-      }
-    }, 200);
-  }
-  function cancelPrint() {
-    clearInterval(loop);
-  }
-
-  const url = document.location.href;
-  if (url.match(/.*\/activities\/.*/)) {
-    setInterval(hookAll, 1000);
-    untilSuccess(() => addButton("Print all slips", printAll));
-    untilSuccess(() => addButton("Cancel print all", cancelPrint));
-  } else if (url.match(/.*\/shiplabel\/packingslip\/.*/)) {
-    // Now we're on /shiplabel/packingslip/<id>, so print
-    untilSuccess(() => {
-      $$("span")
-        .find((s) => s.textContent === "Print")
-        .click();
-      window.addEventListener("afterprint", () => window.close());
-    });
-  }
+    "use strict";
+    // Helpers
+    const $$ = (x) => Array.from(document.querySelectorAll(x));
+    const $ = (x) => document.querySelector(x);
+    const set = (k, v) => localStorage.setItem("uli-" + k, JSON.stringify(v));
+    const get = (k) => JSON.parse(localStorage.getItem("uli-" + k) || "null");
+    function untilSuccess(fn) {
+        const id = setInterval(() => {
+            if (fn())
+                clearInterval(id);
+        }, 200);
+    }
+    const setClicked = (id) => {
+        const clicked = get("clicked") || [];
+        !clicked.includes(id) && clicked.push(id);
+        set("clicked", clicked);
+    };
+    const hasBeenClicked = (id) => (get("clicked") || []).includes(id);
+    const getId = (a) => a.href.match(/\w+$/)[0];
+    const createButton = (text, onclick) => {
+        const button = document.createElement("button");
+        button.textContent = text;
+        button.onclick = onclick;
+        return button;
+    };
+    const addButton = (text, onclick) => {
+        const button = createButton(text, onclick);
+        return Boolean($(".SearchFilterContainer")?.firstChild?.childNodes[1].appendChild(button));
+    };
+    const select = {
+        paymentNames: () => $$(`td a[href^="/activity/payment/"]`),
+    };
+    let hooked = {};
+    function hookAll() {
+        // Select names
+        // TODO: Add class, use :not instead of hooked dict (or use onclick)
+        const names = select.paymentNames();
+        names.forEach((name) => {
+            // Color based on hasBeenClicked
+            const id = getId(name);
+            const color = hasBeenClicked(id) ? "red" : "green";
+            name.style.border = "1px solid " + color;
+            // Only hook listener once
+            if (hooked[name.href])
+                return;
+            hooked[name.href] = true;
+            name.addEventListener("click", () => setClicked(id));
+        });
+    }
+    let loop;
+    function cancelPrint() {
+        if (loop)
+            clearInterval(loop);
+    }
+    function printAll() {
+        const urlPrefix = "https://www.paypal.com/shiplabel/packingslip/";
+        const linkTags = select.paymentNames();
+        const ids = linkTags.map(getId).filter((id) => !hasBeenClicked(id));
+        let i = 0;
+        let win;
+        loop = setInterval(() => {
+            if (!win) {
+                win = window.open(urlPrefix + ids[i]);
+                setClicked(ids[i]);
+            }
+            else if (win.closed) {
+                win = null;
+                i++;
+                if (i >= ids.length) {
+                    cancelPrint();
+                }
+            }
+        }, 200);
+    }
+    const url = document.location.href;
+    if (url.match(/.*\/activities\/.*/)) {
+        setInterval(hookAll, 1000);
+        untilSuccess(() => addButton("Print all slips", printAll));
+        untilSuccess(() => addButton("Cancel print all", cancelPrint));
+    }
+    else if (url.match(/.*\/shiplabel\/packingslip\/.*/)) {
+        // Now we're on /shiplabel/packingslip/<id>, so print
+        untilSuccess(() => {
+            const el = $$("span").find((s) => s.textContent === "Print");
+            if (el) {
+                window.addEventListener("afterprint", () => window.close());
+                el.click();
+                return true;
+            }
+            return false;
+        });
+    }
 })();
