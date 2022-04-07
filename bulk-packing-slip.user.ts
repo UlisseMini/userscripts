@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bulk print packing slips
 // @namespace    https://uli.rocks
-// @version      0.9
+// @version      1.0
 // @description  Bulk print packing slips on paypal
 // @author       Ulisse Mini
 // @match        https://www.paypal.com/*
@@ -9,6 +9,8 @@
 // @grant        GM_saveTab
 // @grant        GM_getTab
 // ==/UserScript==
+
+// TODO: Edit printed users, export, save more robustly then localStorage
 
 (function () {
   "use strict";
@@ -19,7 +21,7 @@
   const $ = (x: string): HTMLElement | null => document.querySelector(x);
   const select = {
     paymentNames: () =>
-      $$(`td a[href^="/activity/payment/"]`) as HTMLAnchorElement[],
+      $$(`td a[href*="/activity/payment/"]`) as HTMLAnchorElement[],
   };
   // Get payment id from payment name element
   const paymentId = (a: HTMLAnchorElement) => a.href.match(/\w+$/)![0];
@@ -32,49 +34,61 @@
   }
 
   // Storage
-  const set = (k: string, v: any) =>
+  const set = (k: string, v: any) => {
     localStorage.setItem("uli-" + k, JSON.stringify(v));
+  };
   const get = (k: string) =>
     JSON.parse(localStorage.getItem("uli-" + k) || "null");
 
-  // Have we clicked a payment? (TODO: Replace with havePrinted; make editable)
-  const setClicked = (id: string) => {
-    const clicked = get("clicked") || [];
-    !clicked.includes(id) && clicked.push(id);
-    set("clicked", clicked);
+  const setPrintedSubs: { [id: string]: (printed: boolean) => void } = {};
+  const setPrinted = (id: string, printed: boolean) => {
+    const clicked = new Set(get("clicked") || []);
+    printed ? clicked.add(id) : clicked.delete(id);
+    // need Array.from since Set isn't directly serializable
+    set("clicked", Array.from(clicked));
+
+    if (setPrintedSubs[id]) setPrintedSubs[id](printed);
   };
-  const hasBeenClicked = (id: string) => (get("clicked") || []).includes(id);
+  const hasBeenPrinted = (id: string) => (get("clicked") || []).includes(id);
 
   // UI for controlling the running script
   const createButton = (text: string, onclick: () => void) => {
     const button = document.createElement("button");
     button.textContent = text;
     button.onclick = onclick;
+    button.style.margin = "1em";
     return button;
   };
 
   const addButton = (text: string, onclick: () => void): boolean => {
     const button = createButton(text, onclick);
-    return Boolean(
-      $(".SearchFilterContainer")?.firstChild?.childNodes[1].appendChild(button)
-    );
+    const parent = $(".SearchFilterContainer .filter-duration-container");
+    if (parent) {
+      parent.appendChild(button);
+      return true;
+    }
+    return false;
   };
 
-  // Called repeatadly. we need hooked so we don't addEventListener twice.
-  let hooked: { [href: string]: boolean } = {};
   function hookPaymentNames() {
     const names = select.paymentNames();
     names.forEach((name: HTMLAnchorElement) => {
-      // Color based on hasBeenClicked
+      // Only hook once
+      if (name.dataset.hooked) return;
+      name.dataset.hooked = "true";
+
       const id = paymentId(name);
-      const color = hasBeenClicked(id) ? "red" : "green";
-      name.style.border = "1px solid " + color;
+      name.addEventListener("click", () => setPrinted(id, true));
 
-      // Only hook listener once
-      if (hooked[name.href]) return;
-      hooked[name.href] = true;
-
-      name.addEventListener("click", () => setClicked(id));
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      // TODO: Subscribe to setPrinted changes (e.g. for auto on click)
+      input.checked = hasBeenPrinted(id);
+      setPrintedSubs[id] = (printed: boolean) => (input.checked = printed);
+      input.onchange = () => setPrinted(id, input.checked);
+      input.style.margin = "0.25em";
+      // TODO: add "printed" label
+      name.parentElement?.appendChild(input);
     });
   }
 
@@ -85,14 +99,17 @@
   function startPrintAll() {
     const urlPrefix = "https://www.paypal.com/shiplabel/packingslip/";
     const linkTags = select.paymentNames();
-    const ids = linkTags.map(paymentId).filter((id) => !hasBeenClicked(id));
+    const ids = linkTags.map(paymentId).filter((id) => !hasBeenPrinted(id));
 
     let i = 0;
     let win: Window | null;
+    // FIXME: If the browser blocks opening popups this will loop infinitely
+    // opening windows.
+    // TODO: Replace with async (this interval stuff is GARBAGE!)
     loop = setInterval(() => {
       if (!win) {
         win = window.open(urlPrefix + ids[i]);
-        setClicked(ids[i]);
+        setPrinted(ids[i], true);
       } else if (win.closed) {
         win = null;
         i++;
